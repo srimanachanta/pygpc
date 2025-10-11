@@ -169,9 +169,9 @@ class Basis:
         # construct 2D list with BasisFunction objects and array with coefficients and
         # initialize array of basis coefficients
         if n_cpu is None:
-            n_cpus = multiprocessing.cpu_count()
+            n_cpu = multiprocessing.cpu_count()
 
-        if n_cpus > 1:
+        if n_cpu > 1:
             workhorse_partial = partial(self.set_basis, problem=problem)
     
             with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
