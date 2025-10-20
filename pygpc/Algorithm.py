@@ -108,7 +108,7 @@ class Algorithm(object):
         options["n_cpu_comp"] : int, optional, default=1
             Number of threads to use for parallel evaluation of the model function.
         options["n_cpu_basis"] : int, optional, default=0
-            Number of threads to use for basis initialization.    
+            Number of threads to use for basis initialization.
         options["n_samples_validation"] : int, optional, default: 1e4
             Number of validation points used to determine the NRMSD if chosen as "error_type". Does not create a
             validation set if there is already one present in the Problem instance (problem.validation).
@@ -193,17 +193,19 @@ class Algorithm(object):
             self.options["n_cpu"] = 1
             self.n_cpu = 1
 
-        if "n_cpu_comp" is self.options.keys():
+        if "n_cpu_comp" in self.options.keys():
             self.n_cpu_comp = self.options["n_cpu_comp"]
         elif "n_cpu" in self.options.keys():
+            self.options["n_cpu_comp"] = self.options["n_cpu"]
             self.n_cpu_comp = self.options["n_cpu"]
         else:
             self.options["n_cpu_comp"] = 1
             self.n_cpu_comp = 1
 
-        if "n_cpu_basis" is self.options.keys():
+        if "n_cpu_basis" in self.options.keys():
             self.n_cpu_basis = self.options["n_cpu_basis"]
         else:
+            self.options["n_cpu_basis"] = 0
             self.n_cpu_basis = 0
 
 
