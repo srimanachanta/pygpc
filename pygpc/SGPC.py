@@ -114,7 +114,7 @@ class SGPC(GPC):
                                    order_max_norm=order_max_norm,
                                    interaction_order=interaction_order,
                                    interaction_order_current=interaction_order_current,
-                                   n_cpu=options["n_cpu"])
+                                   n_cpu=options["n_cpu_basis"])
 
     @staticmethod
     def get_mean(coeffs=None, samples=None):
