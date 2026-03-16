@@ -1,200 +1,79 @@
-name: Build 
+name: CI
 
 on:
-  push:
-    branches: [ master, develop ]
-  pull_request:
-    branches: [ master, develop ]
+  workflow_dispatch:
+  # push:
+  #   branches: [master, develop]
+  # pull_request:
+  #   branches: [master, develop]
+
 jobs:
-  linux:
+  build-wheels:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: windows-2025
+          - os: macos-14
+            macos-deployment-target: "11.0"
+            libomp-url: "https://anaconda.org/conda-forge/llvm-openmp/11.1.0/download/osx-arm64/llvm-openmp-11.1.0-hf3c4609_1.tar.bz2"
+          - os: macos-15-intel
+            macos-deployment-target: "10.15"
+            libomp-url: "https://anaconda.org/conda-forge/llvm-openmp/11.1.0/download/osx-64/llvm-openmp-11.1.0-hda6cdc1_1.tar.bz2"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build and test wheels
+        uses: pypa/cibuildwheel@v3.4.0
+        env:
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
+          CIBW_SKIP: "*-musllinux_* *i686* *-win32"
+          CIBW_BEFORE_ALL_MACOS: "mkdir -p /tmp/libomp && curl -sL ${{ matrix.libomp-url }} | tar -xj -C /tmp/libomp"
+          CIBW_ENVIRONMENT_MACOS: "CC=/usr/bin/clang CXX=/usr/bin/clang++ CPPFLAGS=-I/tmp/libomp/include LDFLAGS=-L/tmp/libomp/lib"
+          # CIBW_TEST_REQUIRES: "matplotlib"
+          # CIBW_TEST_COMMAND: "python -m unittest discover -s {project}/tests"
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-deployment-target }}
+      - uses: actions/upload-artifact@v6
+        with:
+          name: wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
+
+  build-sdist:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
-        include:
-          - python-version: "3.9"
-            cibw-string: "cp39-*"
-          - python-version: "3.10"
-            cibw-string: "cp310-*"
-          - python-version: "3.11"
-            cibw-string: "cp311-*"
-          - python-version: "3.12"
-            cibw-string: "cp312-*"
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install Cython cibuildwheel twine
-        pip install -r requirements.txt
-        pip install .
-    - name: Test with unittest
-      run: |
-        cd tests
-        python -m unittest
-        cd .. 
-    - name: Build with cibuildwheel
-      run: |
-        python -m cibuildwheel --output-dir wheelhouse
-        ls wheelhouse/
-      env:
-        CIBW_MANYLINUX_X86_64_IMAGE: "manylinux2014"
-        CIBW_BEFORE_BUILD: "pip install numpy"
-        CIBW_BUILD: ${{ matrix.cibw-string }}
-        CIBW_SKIP: "*-musllinux_* *i686*"
-    - name: Upload with twine
-      if: "github.ref == 'refs/heads/master' && contains(github.event.head_commit.message, 'PyPI')"
-      run: |
-        python -m twine upload wheelhouse/*.whl
-      env:
-        TWINE_PASSWORD: ${{ secrets.twine_api_key }}
-        TWINE_USERNAME: __token__
-  windows:
-    runs-on: windows-2025
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
-        include:
-          - python-version: "3.9"
-            cibw-string: "cp39-*"
-          - python-version: "3.10"
-            cibw-string: "cp310-*"
-          - python-version: "3.11"
-            cibw-string: "cp311-*"
-          - python-version: "3.12"
-            cibw-string: "cp312-*"
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build sdist
+        run: |
+          pip install build
+          python -m build --sdist
+      - uses: actions/upload-artifact@v6
+        with:
+          name: sdist
+          path: ./dist/*.tar.gz
+
+  publish:
+    needs: [build-wheels, build-sdist]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' && contains(github.event.head_commit.message, 'PyPI')
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install Cython cibuildwheel twine
-        pip install -r requirements.txt
-        pip install .
-    - name: Test with unittest
-      run: |
-        cd tests
-        python -m unittest
-        cd .. 
-    - name: Build with cibuildwheel
-      run: |
-        python -m cibuildwheel --output-dir wheelhouse
-        ls wheelhouse/
-      env:
-        CIBW_BEFORE_BUILD: "pip install numpy"
-        CIBW_BUILD: ${{ matrix.cibw-string }} 
-    - name: Upload with twine
-      if: "github.ref == 'refs/heads/master' && contains(github.event.head_commit.message, 'PyPI')"
-      run: |
-        python -m twine upload wheelhouse/*.whl
-      env:
-        TWINE_PASSWORD: ${{ secrets.twine_api_key }}
-        TWINE_USERNAME: __token__
-  macos_arm64:
-    runs-on: macos-14
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
-        include:
-          - python-version: "3.9"
-            cibw-string: "cp39-*"
-          - python-version: "3.10"
-            cibw-string: "cp310-*"
-          - python-version: "3.11"
-            cibw-string: "cp311-*"
-          - python-version: "3.12"
-            cibw-string: "cp312-*"
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        brew install gcc@13
-        python -m pip install --upgrade pip
-        pip install Cython cibuildwheel twine
-        pip install -r requirements.txt
-        CC=gcc-13 CXX=g++-13 pip install .
-    - name: Test with unittest
-      run: |
-        cd tests
-        python -m unittest
-        cd .. 
-    - name: Build with cibuildwheel
-      run: |
-        python -m cibuildwheel --output-dir wheelhouse
-        ls wheelhouse/
-      env:
-        MACOSX_DEPLOYMENT_TARGET: "10.14"
-        CIBW_BEFORE_BUILD: "pip install numpy delocate==0.10.7"
-        CIBW_BUILD: ${{ matrix.cibw-string }} 
-        CIBW_REPAIR_WHEEL_COMMAND: "delocate-listdeps {wheel} && delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
-        CC: gcc-13
-        CXX: g++-13
-    - name: Upload with twine
-      if: "github.ref == 'refs/heads/master' && contains(github.event.head_commit.message, 'PyPI')"
-      run: |
-        python -m twine upload wheelhouse/*.whl
-      env:
-        TWINE_PASSWORD: ${{ secrets.twine_api_key }}
-        TWINE_USERNAME: __token__
-  macos_x86_64:
-    runs-on: macos-13
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
-        include:
-          - python-version: "3.9"
-            cibw-string: "cp39-*"
-          - python-version: "3.10"
-            cibw-string: "cp310-*"
-          - python-version: "3.11"
-            cibw-string: "cp311-*"
-          - python-version: "3.12"
-            cibw-string: "cp312-*"
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        brew install gcc@13
-        python -m pip install --upgrade pip
-        pip install Cython cibuildwheel twine
-        pip install -r requirements.txt
-        CC=gcc-13 CXX=g++-13 pip install .
-    - name: Test with unittest
-      run: |
-        cd tests
-        python -m unittest
-        cd .. 
-    - name: Build with cibuildwheel
-      run: |
-        python -m cibuildwheel --output-dir wheelhouse
-        ls wheelhouse/
-      env:
-        MACOSX_DEPLOYMENT_TARGET: "10.13"
-        CIBW_BEFORE_BUILD: "pip install numpy delocate==0.10.7"
-        CIBW_BUILD: ${{ matrix.cibw-string }} 
-        CIBW_REPAIR_WHEEL_COMMAND: "delocate-listdeps {wheel} && delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
-        CC: gcc-13
-        CXX: g++-13
-    - name: Upload with twine
-      if: "github.ref == 'refs/heads/master' && contains(github.event.head_commit.message, 'PyPI')"
-      run: |
-        python -m twine upload wheelhouse/*.whl
-      env:
-        TWINE_PASSWORD: ${{ secrets.twine_api_key }}
-        TWINE_USERNAME: __token__
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Upload to PyPI
+        run: |
+          python -m pip install --upgrade pip
+          pip install twine
+          python -m twine upload dist/*
+        env:
+          TWINE_PASSWORD: ${{ secrets.twine_api_key }}
+          TWINE_USERNAME: __token__

@@ -25,8 +25,15 @@ from setuptools import setup, find_packages, Extension
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>
 
-openmp_compile_args = ["-fopenmp"]
-openmp_link_args = ["-lgomp"]
+if sys.platform == "win32":
+    openmp_compile_args = ["/openmp"]
+    openmp_link_args = []
+elif sys.platform == "darwin":
+    openmp_compile_args = ["-Xpreprocessor", "-fopenmp"]
+    openmp_link_args = ["-lomp"]
+else:
+    openmp_compile_args = ["-fopenmp"]
+    openmp_link_args = ["-lgomp"]
 pygpc_extensions_src_file_path = [
     os.path.join("pckg", "pygpc_extensions", "src", "pygpc_extensions.cpp")
 ]

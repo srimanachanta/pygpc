@@ -6,6 +6,8 @@ include pygpc/*.dylib
 include *.so
 include *.dll
 include *.dylib
+recursive-include pckg/pygpc_extensions/src *.cpp
+recursive-include pckg/pygpc_extensions/include *.hpp
 exclude templates/*
 exclude tests/*
 exclude tutorials/*
